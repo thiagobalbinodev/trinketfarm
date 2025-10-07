@@ -1,0 +1,98 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+
+local teleportEnabled = false
+local teleportInterval = 1
+
+local asyncRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Async")
+
+local merchantCFrame = CFrame.new(
+    -3637.56421, 707.5177, -1480.26685,
+    0.988914251, 6.92491184e-08, 0.148487851,
+    -6.71440574e-08, 1, -1.9189498e-08,
+    -0.148487851, 9.0066905e-09, 0.988914251
+)
+
+-- Pega o personagem atualizado sempre que necessário
+local function getHumanoidRootPart()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
+end
+
+local function getTrinkets()
+    local trinkets = {}
+    for _, v in pairs(workspace:GetChildren()) do
+        if v:FindFirstChild("PickableItem") and v:FindFirstChild("Part") then
+            table.insert(trinkets, v)
+        end
+    end
+    return trinkets
+end
+
+local function interactWithTrinket(trinket)
+    local humanoidRootPart = getHumanoidRootPart()
+
+    -- Teleporta um pouco acima do Trinket para evitar glitches
+    humanoidRootPart.CFrame = trinket.Part.CFrame + Vector3.new(0, 3, 0)
+    
+    wait(0.1)
+
+    -- Simula pressionar e soltar a tecla E com delay
+    VirtualInputManager:SendKeyEvent(true, "E", false, humanoidRootPart)
+    wait(0.15)
+    VirtualInputManager:SendKeyEvent(false, "E", false, humanoidRootPart)
+
+    -- (Opcional) ainda tenta usar o evento remoto
+    if asyncRemote and asyncRemote:IsA("RemoteEvent") then
+        asyncRemote:FireServer("Character", "Interaction", trinket.Part)
+    end
+
+    print("Interagiu com o Trinket:", trinket.Name)
+end
+
+local function teleportToTrinkets()
+    while teleportEnabled do
+        local trinkets = getTrinkets()
+
+        for _, v in pairs(trinkets) do
+            if not teleportEnabled then break end
+
+            local success, err = pcall(function()
+                -- Verifica se o Trinket ainda está válido
+                if v and v.Parent and v:FindFirstChild("Part") and v:FindFirstChild("PickableItem") then
+                    interactWithTrinket(v)
+                    wait(teleportInterval)
+                end
+            end)
+
+            if not success then
+                warn("Erro ao interagir com Trinket:", err)
+            end
+        end
+
+        wait(0.5)
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.P then
+        teleportEnabled = not teleportEnabled
+        if teleportEnabled then
+            print("Teleporte automático ativado")
+            coroutine.wrap(teleportToTrinkets)()
+        else
+            print("Teleporte automático desativado")
+        end
+
+    elseif input.KeyCode == Enum.KeyCode.K then
+        local humanoidRootPart = getHumanoidRootPart()
+        humanoidRootPart.CFrame = merchantCFrame
+        print("Teleportado para o Merchant!")
+    end
+end)
