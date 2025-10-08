@@ -23,31 +23,6 @@ local teleportInterval = 1.5 -- segundos entre teleportes
 local remoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Async")
 
 local teleportCFrameK = CFrame.new(
-    -- LocalScript (StarterPlayerScripts)
-
-local StarterGui = game:GetService("StarterGui")
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
--- Notificação de carregamento do script
-StarterGui:SetCore("SendNotification", {
-    Title = "Mohammed Script (Trinket Farm)",
-    Text = "O script foi carregado com sucesso.",
-    Duration = 10
-})
-
-local player = Players.LocalPlayer
-local teleportTargets = {}
-local currentTargetIndex = 1
-local teleporting = false
-local teleportInterval = 1.5 -- segundos entre teleportes
-
-local remoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Async")
-
-local teleportCFrameK = CFrame.new(
     -2371.97559, 1151.09363, -1525.15417,
     0.999634981, -0, -0.0270163231,
     0, 1, -0,
@@ -98,8 +73,18 @@ local function trySimulatePickup(model)
 	end
 end
 
+-- Cooldown para evitar spam de updateTargets
+local lastUpdate = 0
+local updateCooldown = 5 -- segundos
+
 local function teleportToNext()
-	if #teleportTargets == 0 then return end
+	if #teleportTargets == 0 then
+		if tick() - lastUpdate > updateCooldown then
+			updateTargets()
+			lastUpdate = tick()
+		end
+		return
+	end
 
 	local character = player.Character or player.CharacterAdded:Wait()
 	local root = character:FindFirstChild("HumanoidRootPart")
@@ -115,10 +100,12 @@ local function teleportToNext()
 	currentTargetIndex += 1
 	if currentTargetIndex > #teleportTargets then
 		currentTargetIndex = 1
-		updateTargets() -- Atualiza a lista automaticamente aqui
+		updateTargets()
+		lastUpdate = tick()
 	end
 end
 
+-- Loop principal
 task.spawn(function()
 	while true do
 		if teleporting then
@@ -128,9 +115,10 @@ task.spawn(function()
 	end
 end)
 
+-- Controle por teclado
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	
+
 	if input.KeyCode == Enum.KeyCode.P then
 		teleporting = not teleporting
 
@@ -138,109 +126,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			print("🔁 Teleporte automático ATIVADO")
 			updateTargets()
 			currentTargetIndex = 1
+			lastUpdate = tick()
 		else
 			print("⏹️ Teleporte automático DESATIVADO")
 		end
-	
-	elseif input.KeyCode == Enum.KeyCode.K then
-		local character = player.Character or player.CharacterAdded:Wait()
-		local root = character:FindFirstChild("HumanoidRootPart")
-		if root then
-			root.CFrame = teleportCFrameK
-			print("🚀 Teleportado para posição customizada (tecla K)")
-		end
-	end
-end)
-)
 
-local function isValidTarget(obj)
-	if not obj:IsA("Model") and not obj:IsA("Folder") then return false end
-
-	local hasPart = false
-	local hasPickableItem = false
-
-	for _, child in pairs(obj:GetChildren()) do
-		if child:IsA("BasePart") and child.Name == "Part" then
-			hasPart = true
-		elseif child.Name == "PickableItem" then
-			hasPickableItem = true
-		end
-	end
-
-	return hasPart and hasPickableItem
-end
-
-local function updateTargets()
-	teleportTargets = {}
-	for _, obj in pairs(workspace:GetChildren()) do
-		if isValidTarget(obj) then
-			table.insert(teleportTargets, obj)
-		end
-	end
-end
-
-local function trySimulatePickup(model)
-	local part = model:FindFirstChild("Part")
-	if part and part:IsA("BasePart") then
-		pcall(function()
-			task.wait(0.3)
-			remoteEvent:FireServer("Character", "Interaction", part)
-			task.wait(0.2)
-			remoteEvent:FireServer("Character", "Interaction", part)
-		end)
-
-		pcall(function()
-			VirtualInputManager:SendKeyEvent(true, "E", false, game)
-			task.wait(0.1)
-			VirtualInputManager:SendKeyEvent(false, "E", false, game)
-		end)
-	end
-end
-
-local function teleportToNext()
-	if #teleportTargets == 0 then return end
-
-	local character = player.Character or player.CharacterAdded:Wait()
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-
-	local target = teleportTargets[currentTargetIndex]
-	local part = target:FindFirstChild("Part")
-	if part and part:IsA("BasePart") then
-		root.CFrame = part.CFrame + Vector3.new(0, 5, 0)
-		trySimulatePickup(target)
-	end
-
-	currentTargetIndex += 1
-	if currentTargetIndex > #teleportTargets then
-		currentTargetIndex = 1
-		updateTargets() -- Atualiza a lista automaticamente aqui
-	end
-end
-
-task.spawn(function()
-	while true do
-		if teleporting then
-			teleportToNext()
-		end
-		task.wait(teleportInterval)
-	end
-end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	
-	if input.KeyCode == Enum.KeyCode.P then
-		teleporting = not teleporting
-
-		if teleporting then
-			print("🔁 Teleporte automático ATIVADO")
-			updateTargets()
-			currentTargetIndex = 1
-		else
-			print("⏹️ Teleporte automático DESATIVADO")
-		end
-	
 	elseif input.KeyCode == Enum.KeyCode.K then
 		local character = player.Character or player.CharacterAdded:Wait()
 		local root = character:FindFirstChild("HumanoidRootPart")
