@@ -1,98 +1,128 @@
+-- LocalScript (StarterPlayerScripts)
+
+local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
+-- Notificação de carregamento do script
+StarterGui:SetCore("SendNotification", {
+    Title = "Mohammed Script (Trinket Farm)",
+    Text = "O script foi carregado com sucesso.",
+    Duration = 10
+})
+
 local player = Players.LocalPlayer
+local teleportTargets = {}
+local currentTargetIndex = 1
+local teleporting = false
+local teleportInterval = 1.5 -- segundos entre teleportes
 
-local teleportEnabled = false
-local teleportInterval = 1
+local remoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Async")
 
-local asyncRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Async")
-
-local merchantCFrame = CFrame.new(
-    -3637.56421, 707.5177, -1480.26685,
-    0.988914251, 6.92491184e-08, 0.148487851,
-    -6.71440574e-08, 1, -1.9189498e-08,
-    -0.148487851, 9.0066905e-09, 0.988914251
+local teleportCFrameK = CFrame.new(
+    -2371.97559, 1151.09363, -1525.15417,
+    0.999634981, -0, -0.0270163231,
+    0, 1, -0,
+    0.0270163231, 0, 0.999634981
 )
 
--- Pega o personagem atualizado sempre que necessário
-local function getHumanoidRootPart()
-    local char = player.Character or player.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
+local function isValidTarget(obj)
+	if not obj:IsA("Model") and not obj:IsA("Folder") then return false end
+
+	local hasPart = false
+	local hasPickableItem = false
+
+	for _, child in pairs(obj:GetChildren()) do
+		if child:IsA("BasePart") and child.Name == "Part" then
+			hasPart = true
+		elseif child.Name == "PickableItem" then
+			hasPickableItem = true
+		end
+	end
+
+	return hasPart and hasPickableItem
 end
 
-local function getTrinkets()
-    local trinkets = {}
-    for _, v in pairs(workspace:GetChildren()) do
-        if v:FindFirstChild("PickableItem") and v:FindFirstChild("Part") then
-            table.insert(trinkets, v)
-        end
-    end
-    return trinkets
+local function updateTargets()
+	teleportTargets = {}
+	for _, obj in pairs(workspace:GetChildren()) do
+		if isValidTarget(obj) then
+			table.insert(teleportTargets, obj)
+		end
+	end
 end
 
-local function interactWithTrinket(trinket)
-    local humanoidRootPart = getHumanoidRootPart()
+local function trySimulatePickup(model)
+	local part = model:FindFirstChild("Part")
+	if part and part:IsA("BasePart") then
+		pcall(function()
+			task.wait(0.3)
+			remoteEvent:FireServer("Character", "Interaction", part)
+			task.wait(0.2)
+			remoteEvent:FireServer("Character", "Interaction", part)
+		end)
 
-    -- Teleporta um pouco acima do Trinket para evitar glitches
-    humanoidRootPart.CFrame = trinket.Part.CFrame + Vector3.new(0, 3, 0)
-    
-    wait(0.1)
-
-    -- Simula pressionar e soltar a tecla E com delay
-    VirtualInputManager:SendKeyEvent(true, "E", false, humanoidRootPart)
-    wait(0.15)
-    VirtualInputManager:SendKeyEvent(false, "E", false, humanoidRootPart)
-
-    -- (Opcional) ainda tenta usar o evento remoto
-    if asyncRemote and asyncRemote:IsA("RemoteEvent") then
-        asyncRemote:FireServer("Character", "Interaction", trinket.Part)
-    end
-
-    print("Interagiu com o Trinket:", trinket.Name)
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(true, "E", false, game)
+			task.wait(0.1)
+			VirtualInputManager:SendKeyEvent(false, "E", false, game)
+		end)
+	end
 end
 
-local function teleportToTrinkets()
-    while teleportEnabled do
-        local trinkets = getTrinkets()
+local function teleportToNext()
+	if #teleportTargets == 0 then return end
 
-        for _, v in pairs(trinkets) do
-            if not teleportEnabled then break end
+	local character = player.Character or player.CharacterAdded:Wait()
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
 
-            local success, err = pcall(function()
-                -- Verifica se o Trinket ainda está válido
-                if v and v.Parent and v:FindFirstChild("Part") and v:FindFirstChild("PickableItem") then
-                    interactWithTrinket(v)
-                    wait(teleportInterval)
-                end
-            end)
+	local target = teleportTargets[currentTargetIndex]
+	local part = target:FindFirstChild("Part")
+	if part and part:IsA("BasePart") then
+		root.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+		trySimulatePickup(target)
+	end
 
-            if not success then
-                warn("Erro ao interagir com Trinket:", err)
-            end
-        end
-
-        wait(0.5)
-    end
+	currentTargetIndex += 1
+	if currentTargetIndex > #teleportTargets then
+		currentTargetIndex = 1
+		updateTargets() -- Atualiza a lista automaticamente aqui
+	end
 end
+
+task.spawn(function()
+	while true do
+		if teleporting then
+			teleportToNext()
+		end
+		task.wait(teleportInterval)
+	end
+end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.P then
+		teleporting = not teleporting
 
-    if input.KeyCode == Enum.KeyCode.P then
-        teleportEnabled = not teleportEnabled
-        if teleportEnabled then
-            print("Teleporte automático ativado")
-            coroutine.wrap(teleportToTrinkets)()
-        else
-            print("Teleporte automático desativado")
-        end
-
-    elseif input.KeyCode == Enum.KeyCode.K then
-        local humanoidRootPart = getHumanoidRootPart()
-        humanoidRootPart.CFrame = merchantCFrame
-        print("Teleportado para o Merchant!")
-    end
+		if teleporting then
+			print("🔁 Teleporte automático ATIVADO")
+			updateTargets()
+			currentTargetIndex = 1
+		else
+			print("⏹️ Teleporte automático DESATIVADO")
+		end
+	
+	elseif input.KeyCode == Enum.KeyCode.K then
+		local character = player.Character or player.CharacterAdded:Wait()
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root then
+			root.CFrame = teleportCFrameK
+			print("🚀 Teleportado para posição customizada (tecla K)")
+		end
+	end
 end)
