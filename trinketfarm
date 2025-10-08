@@ -23,10 +23,10 @@ local teleportInterval = 1.5 -- segundos entre teleportes
 local remoteEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Async")
 
 local teleportCFrameK = CFrame.new(
-    -2371.97559, 1151.09363, -1525.15417,
-    0.999634981, -0, -0.0270163231,
-    0, 1, -0,
-    0.0270163231, 0, 0.999634981
+    -3637.56421, 707.5177, -1480.26685,
+    0.988914251, 6.92491184e-08, 0.148487851,
+    -6.71440574e-08, 1, -1.9189498e-08,
+    -0.148487851, 9.0066905e-09, 0.988914251
 )
 
 local function isValidTarget(obj)
